@@ -47,7 +47,7 @@ int send_ping(int soc, char *name, int len, unsigned short sqc, struct timeval *
   unsigned char *ptr;
   int psize;
   int n;
-  // 送信データを格納するバッファ領域
+  // 送信するデータを格納するバッファ領域
   char sbuff[BUFSIZE];
 
   sinp = (struct sockaddr_in *)&sa;
@@ -86,7 +86,7 @@ int send_ping(int soc, char *name, int len, unsigned short sqc, struct timeval *
     *ptr ++= (unsigned char)0xA5;
   }
   ptr = (unsigned char *)&sbuff[ECHO_HDR_SIZE];
-  // sendtimeをptrにコピーする
+  // sendtimeをptrの指すアドレスに挿入する
   memcpy(ptr, sendtime, sizeof(struct timeval));
   // checksumを計算して格納する
   icp->checksum = calc_checksum((u_short *)icp, len);
@@ -100,12 +100,22 @@ int send_ping(int soc, char *name, int len, unsigned short sqc, struct timeval *
   }
 }
 
+int check_packet(char *rbuff,int nbytes,int len,struct sockaddr_in *from,unsigned short sqc,int *ttl,struct timeval *sendtime,struct timeval *recvtime,double *diff)
+{
+  // nop
+}
 
+int recv_ping(int soc,int len,unsigned short sqc,struct timeval *sendtime,int timeoutSec)
+{
+  // nop
+}
 
+int ping_check(char *name,int len,int times,int timeoutSec)
+{
+  // nop
+}
 
-
-
-int main()
+int main(int argc, char *argv[])
 {
   return 0;
 }
