@@ -9,5 +9,5 @@
 ### linux
 ```
 $ cc -Wall ping.c -o ping
-$ ./ping 8.8.8.8
+$ sudo ./ping 8.8.8.8
 ```

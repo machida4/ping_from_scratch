@@ -215,6 +215,7 @@ int ping_check(char *name,int len,int times,int timeoutSec)
   int total = 0, total_no = 0;
 
   if ((soc = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP)) < 0) {
+    printf("errno=%d: %s\n", errno, strerror(errno));
     return -300;
   }
 
