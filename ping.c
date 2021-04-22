@@ -102,7 +102,48 @@ int send_ping(int soc, char *name, int len, unsigned short sqc, struct timeval *
 
 int check_packet(char *rbuff,int nbytes,int len,struct sockaddr_in *from,unsigned short sqc,int *ttl,struct timeval *sendtime,struct timeval *recvtime,double *diff)
 {
-  // nop
+  struct iphdr *iph;
+  struct icmphdr *icp;
+  int i;
+  unsigned char *ptr;
+
+  // RTTを計算する
+  *diff = (double)(recvtime->tv_sec-sendtime->tv_sec) + (double)(recvtime->tv_usec-sendtime->tv_usec) / 1000000.0;
+
+  // 受信バッファに含まれるipヘッダ
+  iph = (struct iphdr *)rbuff;
+  *ttl = iph->ttl;
+
+  // ICMPヘッダ
+  icp = (struct icmphdr *)(rbuff + iph->ihl * 4);
+
+  // バリデーション
+  if (ntohs(icp->un.echo.id) != (unsigned short)getpid()) {
+    return 1;
+  }
+  if (nbytes < len + iph->ihl * 4) {
+    return -3000;
+  }
+  if (icp->type != ICMP_ECHOREPLY) {
+    return -3010;
+  }
+  if (ntohs(icp->un.echo.sequence) != sqc) {
+    return -3030;
+  }
+
+  ptr = (unsigned char *)(rbuff + iph->ihl * 4 + ECHO_HDR_SIZE);
+  memcpy(sendtime, ptr, sizeof(struct timeval));
+  ptr += sizeof(struct timeval);
+
+  for (i = nbytes - iph->ihl * 4 - ECHO_HDR_SIZE - sizeof(struct timeval); i; i--) {
+    if (*ptr++ != 0xA5) {
+      return -3040;
+    }
+  }
+
+  printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.2f ms\n",nbytes-iph->ihl*4,inet_ntoa(from->sin_addr),sqc,*ttl,*diff*1000.0);
+
+  return 0;
 }
 
 int recv_ping(int soc,int len,unsigned short sqc,struct timeval *sendtime,int timeoutSec)
@@ -117,5 +158,20 @@ int ping_check(char *name,int len,int times,int timeoutSec)
 
 int main(int argc, char *argv[])
 {
-  return 0;
+  int ret;
+
+  if (argc < 2) {
+    fprintf(stderr,"ping target\n");
+    return EXIT_FAILURE;
+  }
+
+  ret = PingCheck(argv[1], 64, 5, 1);
+
+  if (ret >= 0) {
+    printf("RTT:%dms\n",ret);
+    return EXIT_SUCCESS;
+  } else {
+    printf("error:%d\n",ret);
+    return EXIT_FAILURE;
+  }
 }
