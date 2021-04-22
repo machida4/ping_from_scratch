@@ -141,19 +141,103 @@ int check_packet(char *rbuff,int nbytes,int len,struct sockaddr_in *from,unsigne
     }
   }
 
-  printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.2f ms\n",nbytes-iph->ihl*4,inet_ntoa(from->sin_addr),sqc,*ttl,*diff*1000.0);
+  printf(
+    "%d bytes from %s: icmp_seq=%d ttl=%d time=%.2f ms\n",
+    nbytes-iph->ihl * 4,
+    inet_ntoa(from->sin_addr),
+    sqc,
+    *ttl,
+    *diff*1000.0
+  );
 
   return 0;
 }
 
-int recv_ping(int soc,int len,unsigned short sqc,struct timeval *sendtime,int timeoutSec)
-{
-  // nop
+int receive_ping(int soc,int len,unsigned short sqc,struct timeval *sendtime,int timeoutSec) {
+  struct pollfd targets[1];
+  double diff;
+  int nready;
+  int ret, nbytes, ttl;
+  struct sockaddr_in from;
+  socklen_t fromlen;
+  struct timeval recvtime;
+  char rbuff[BUFSIZE];
+
+  memset(rbuff, 0, BUFSIZE);
+
+  for (;;) {
+    targets[0].fd = soc;
+    targets[0].events = POLLIN | POLLERR;
+    nready = poll(targets, 1, timeoutSec * 1000);
+
+    if (nready == 0) {
+      return -2000;
+    }
+    if (nready == -1) {
+      if (errno == EINTR) {
+        continue;
+      } else {
+        return -2010;
+      }
+    }
+
+    // 受信
+    fromlen = sizeof(from);
+    nbytes = recvfrom(soc, rbuff, sizeof(rbuff), 0, (struct sockaddr *)&from, &fromlen);
+
+    // 受信時刻を取得してrecvtimeに格納
+    gettimeofday(&recvtime, NULL);
+
+    // 受信したパケットの確認
+    ret = check_packet(rbuff, nbytes, len, &from, sqc, &ttl, sendtime, &recvtime, &diff);
+
+    switch (ret) {
+      case 0:
+        return (int)(diff * 1000.0);
+      case 1:
+        if (diff > timeoutSec * 1000) {
+          // Timeout
+          return -2000;
+        }
+        break;
+      default:
+        return -10000;
+    }
+  }
 }
 
 int ping_check(char *name,int len,int times,int timeoutSec)
 {
-  // nop
+  int soc;
+  int i;
+  struct timeval sendtime;
+  int ret;
+  int total = 0, total_no = 0;
+
+  if ((soc = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP)) < 0) {
+    return -300;
+  }
+
+  for (i=0;i < times;i++) {
+    ret = send_ping(soc, name, len, i + 1, &sendtime);
+    if (ret == 0) {
+      ret = receive_ping(soc, len, i + 1, &sendtime, timeoutSec);
+      if (ret >= 0) {
+        total += ret;
+        total_no++;
+      }
+    }
+
+    sleep(1);
+  }
+
+  close(soc);
+
+  if (total_no > 0) {
+    return total/total_no;
+  } else {
+    return -1;
+  }
 }
 
 int main(int argc, char *argv[])
@@ -161,17 +245,17 @@ int main(int argc, char *argv[])
   int ret;
 
   if (argc < 2) {
-    fprintf(stderr,"ping target\n");
+    fprintf(stderr, "ping target\n");
     return EXIT_FAILURE;
   }
 
-  ret = PingCheck(argv[1], 64, 5, 1);
+  ret = ping_check(argv[1], 64, 5, 1);
 
   if (ret >= 0) {
-    printf("RTT:%dms\n",ret);
+    printf("RTT:%dms\n", ret);
     return EXIT_SUCCESS;
   } else {
-    printf("error:%d\n",ret);
+    printf("error:%d\n", ret);
     return EXIT_FAILURE;
   }
 }
